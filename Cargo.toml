@@ -1,0 +1,11 @@
+[package]
+name = "bootd"
+version = "0.1.0"
+edition = "2024"
+
+[unstable]
+build-std = ["alloc", "core", "compiler_builtins"]
+build-std-features = ["compiler-builtins-mem"]
+
+[dependencies]
+uefi = { version = "0.36.1", features = ["global_allocator", "alloc"] }

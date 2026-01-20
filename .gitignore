@@ -1,0 +1,4 @@
+/target
+/esp
+OVMF_VARS.fd
+run_qemu.sh
