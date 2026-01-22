@@ -4,10 +4,13 @@
 extern crate alloc;
 
 mod profile;
-mod error;
 mod options;
+mod error;
+mod menu;
 
 use options::Options;
+use error::Error;
+use menu::Menu;
 
 use uefi::prelude::*;
 use uefi::println;
@@ -21,15 +24,29 @@ fn panic(info: &core::panic::PanicInfo) -> ! {
     loop {}
 }
 
+fn main() -> Result<(), Error> {
+    let options = Options::new()?;
+
+    let path = options.profiles()?;
+
+    println!("info: bootd.profiles={}", path);
+
+    let profiles = profile::load_profiles(path)?;
+
+    let mut menu = Menu::new(profiles)?;
+
+    let profile = menu.select()?;
+
+    println!("info: booting: {}", profile.name);
+
+    Ok(())
+}
+
 #[entry]
-fn main() -> Status {
-    // TODO: remove these unwraps, this is only to test that Options works, proper error handling
-    // is next
-    let options = Options::new().unwrap();
-
-    println!("info: bootd.profiles={}", options.profiles().unwrap());
-
-    loop {}
+fn entry() -> Status {
+    if let Err(err) = main() {
+        panic!("{}", err);
+    }
 
     Status::SUCCESS
 }

@@ -18,7 +18,7 @@ impl Options {
             .map_err(|err| Error::OpenProtocol(Box::new(err)))?;
 
         Ok(Options {
-            options: protocol.load_options_as_cstr16().map_err(|_| Error::LoadOptions)?.to_string(),
+            options: protocol.load_options_as_cstr16().map_err(|_| Error::LoadOptionsFailed)?.to_string(),
         })
     }
 
