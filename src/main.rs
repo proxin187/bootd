@@ -39,7 +39,7 @@ fn main() -> Result<(), Error> {
 
     println!("info: booting: {}", profile.name);
 
-    Ok(())
+    profile.boot_image()
 }
 
 #[entry]

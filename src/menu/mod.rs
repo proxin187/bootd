@@ -24,6 +24,12 @@ impl Menu {
         }
     }
 
+    fn disable_cursor(&self) {
+        system::with_stdout(|output| {
+            let _ = output.enable_cursor(false);
+        });
+    }
+
     fn wait_for_input(&mut self) -> Result<Option<Key>, Error> {
         system::with_stdin(|input| {
             boot::wait_for_event(&mut [input.wait_for_key_event().unwrap()]).map_err(|_| Error::InputFailed)?;
@@ -33,16 +39,16 @@ impl Menu {
     }
 
     pub fn select<'a>(&'a mut self) -> Result<&'a Profile, Error> {
-        loop {
-            system::with_stdout(|output| -> Result<(), Error> {
-                output.clear().map_err(|_| Error::OutputFailed)
-            })?;
+        self.disable_cursor();
 
-            for (index, profile) in self.profiles.iter().enumerate() {
+        println!("info: available profiles:");
+
+        loop {
+            for (index, profile) in self.profiles.iter_mut().enumerate() {
                 if index == self.select {
-                    println!("> {} - {}", profile.name, profile.kernel);
+                    println!("> {}", profile.name);
                 } else {
-                    println!("{} - {}", profile.name, profile.kernel);
+                    println!("{}  ", profile.name);
                 }
             }
 
@@ -52,6 +58,12 @@ impl Menu {
                 Some(Key::Printable(character)) if Into::<char>::into(character) == '\r' => return Ok(&self.profiles[self.select]),
                 _ => {},
             }
+
+            system::with_stdout(|output| -> Result<(), Error> {
+                let (_, row) = output.cursor_position();
+
+                output.set_cursor_position(0, row - self.profiles.len()).map_err(|_| Error::OutputFailed)
+            })?;
         }
     }
 }

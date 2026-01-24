@@ -1,17 +1,23 @@
 use crate::error::Error;
 
+use core::mem::MaybeUninit;
+
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 use alloc::vec;
 
 use uefi::proto::media::file::{File, FileMode, FileAttribute, FileInfo, Directory};
+use uefi::proto::device_path::build::media::FilePath;
+use uefi::proto::device_path::build::DevicePathBuilder;
+use uefi::boot::{self, LoadImageSource};
+use uefi::proto::BootPolicy;
 use uefi::fs::PathBuf;
-use uefi::{println, boot};
+use uefi::CString16;
 
 
 pub struct Profile {
     pub name: String,
-    pub kernel: String,
+    pub kernel: CString16,
     pub cmdline: String,
 }
 
@@ -30,9 +36,28 @@ impl Profile {
 
         Ok(Profile {
             name: lines.next().ok_or(Error::InvalidProfileFormat)?.to_string(),
-            kernel: lines.next().ok_or(Error::InvalidProfileFormat)?.to_string(),
+            kernel: lines.next().and_then(|line| CString16::try_from(line.as_ref()).ok()).ok_or(Error::InvalidProfileFormat)?,
             cmdline: lines.next().ok_or(Error::InvalidProfileFormat)?.to_string(),
         })
+    }
+
+    pub fn boot_image(&self) -> Result<(), Error> {
+        let mut buffer = [MaybeUninit::uninit(); 256];
+
+        let path = DevicePathBuilder::with_buf(&mut buffer)
+            .push(&FilePath {
+                path_name: &self.kernel,
+            })
+            .expect("unreachable")
+            .finalize()
+            .map_err(|_| Error::DevicePathFailed)?;
+
+        let handle = boot::load_image(boot::image_handle(), LoadImageSource::FromDevicePath { device_path: path, boot_policy: BootPolicy::BootSelection })
+            .map_err(|_| Error::LoadImageFailed)?;
+
+        // TODO: we need to set the kernel command line parameters and then start the image
+
+        Ok(())
     }
 }
 
