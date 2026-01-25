@@ -1,15 +1,17 @@
 use alloc::boxed::Box;
 
 use uefi::fs::PathBuf;
+use uefi::CString16;
 
 
 #[derive(Debug)]
 pub enum Error {
     OpenProtocol(Box<dyn core::error::Error>),
     InvalidProfilesDirectory(PathBuf),
+    LoadImageFailed(CString16),
     LoadOptionsFailed,
     DevicePathFailed,
-    LoadImageFailed,
+    StartImageFailed,
     NoProfilesPath,
     GetFileSystem,
     RootVolume,
@@ -27,7 +29,8 @@ impl core::fmt::Display for Error {
             Error::InvalidProfilesDirectory(path) => f.write_fmt(format_args!("invalid profiles directory: {}", path)),
             Error::LoadOptionsFailed => f.write_str("failed to get load options: load options must be present and valid utf-16"),
             Error::DevicePathFailed => f.write_str("failed to create device path"),
-            Error::LoadImageFailed => f.write_str("failed to load image"),
+            Error::LoadImageFailed(kernel) => f.write_fmt(format_args!("failed to load image: {}", kernel)),
+            Error::StartImageFailed => f.write_str("failed to start image"),
             Error::NoProfilesPath => f.write_str("couldnt find 'bootd.profiles' with UEFI LoadOptions"),
             Error::GetFileSystem => f.write_str("failed to get image file system"),
             Error::RootVolume => f.write_str("failed to open the root file system volume"),

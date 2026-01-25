@@ -3,12 +3,14 @@ use crate::error::Error;
 use core::mem::MaybeUninit;
 
 use alloc::string::{String, ToString};
+use alloc::boxed::Box;
 use alloc::vec::Vec;
 use alloc::vec;
 
 use uefi::proto::media::file::{File, FileMode, FileAttribute, FileInfo, Directory};
 use uefi::proto::device_path::build::media::FilePath;
 use uefi::proto::device_path::build::DevicePathBuilder;
+use uefi::proto::loaded_image::LoadedImage;
 use uefi::boot::{self, LoadImageSource};
 use uefi::proto::BootPolicy;
 use uefi::fs::PathBuf;
@@ -18,7 +20,7 @@ use uefi::CString16;
 pub struct Profile {
     pub name: String,
     pub kernel: CString16,
-    pub cmdline: String,
+    pub cmdline: Vec<u16>,
 }
 
 impl Profile {
@@ -34,16 +36,21 @@ impl Profile {
         let mut lines = buffer.split(|character| *character as char == '\n')
             .map(|line| String::from_utf8_lossy(line));
 
+        let name = lines.next().ok_or(Error::InvalidProfileFormat)?.to_string();
+        let kernel = lines.next().and_then(|line| CString16::try_from(line.as_ref()).ok()).ok_or(Error::InvalidProfileFormat)?;
+        let cmdline = lines.next().ok_or(Error::InvalidProfileFormat)?.to_string();
+
         Ok(Profile {
-            name: lines.next().ok_or(Error::InvalidProfileFormat)?.to_string(),
-            kernel: lines.next().and_then(|line| CString16::try_from(line.as_ref()).ok()).ok_or(Error::InvalidProfileFormat)?,
-            cmdline: lines.next().ok_or(Error::InvalidProfileFormat)?.to_string(),
+            name,
+            kernel,
+            cmdline: cmdline.encode_utf16().collect(),
         })
     }
 
     pub fn boot_image(&self) -> Result<(), Error> {
         let mut buffer = [MaybeUninit::uninit(); 256];
 
+        // TODO: we are building an incomplete device path, we also need have the ESP device path
         let path = DevicePathBuilder::with_buf(&mut buffer)
             .push(&FilePath {
                 path_name: &self.kernel,
@@ -53,11 +60,16 @@ impl Profile {
             .map_err(|_| Error::DevicePathFailed)?;
 
         let handle = boot::load_image(boot::image_handle(), LoadImageSource::FromDevicePath { device_path: path, boot_policy: BootPolicy::BootSelection })
-            .map_err(|_| Error::LoadImageFailed)?;
+            .map_err(|_| Error::LoadImageFailed(self.kernel.clone()))?;
 
-        // TODO: we need to set the kernel command line parameters and then start the image
+        let mut loaded_image = boot::open_protocol_exclusive::<LoadedImage>(handle)
+            .map_err(|err| Error::OpenProtocol(Box::new(err)))?;
 
-        Ok(())
+        unsafe {
+            loaded_image.set_load_options(self.cmdline.as_ptr() as *const u8, (self.cmdline.len() * 2) as u32);
+        }
+
+        boot::start_image(handle).map_err(|_| Error::StartImageFailed)
     }
 }
 
