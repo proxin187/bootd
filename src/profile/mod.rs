@@ -8,13 +8,15 @@ use alloc::vec::Vec;
 use alloc::vec;
 
 use uefi::proto::media::file::{File, FileMode, FileAttribute, FileInfo, Directory};
+use uefi::proto::device_path::text::{DisplayOnly, AllowShortcuts};
 use uefi::proto::device_path::build::media::FilePath;
 use uefi::proto::device_path::build::DevicePathBuilder;
+use uefi::proto::device_path::DevicePath;
 use uefi::proto::loaded_image::LoadedImage;
-use uefi::boot::{self, LoadImageSource};
+use uefi::boot::{self, LoadImageSource, ScopedProtocol};
 use uefi::proto::BootPolicy;
 use uefi::fs::PathBuf;
-use uefi::CString16;
+use uefi::{println, CString16};
 
 
 pub struct Profile {
@@ -47,17 +49,33 @@ impl Profile {
         })
     }
 
+    fn device_path(&self) -> Result<ScopedProtocol<DevicePath>, Error> {
+        let loaded_image = boot::open_protocol_exclusive::<LoadedImage>(boot::image_handle())
+            .map_err(|err| Error::OpenProtocol(Box::new(err)))?;
+
+        let device = loaded_image.device().ok_or(Error::DevicePathFailed)?;
+
+        boot::open_protocol_exclusive::<DevicePath>(device)
+            .map_err(|err| Error::OpenProtocol(Box::new(err)))
+    }
+
     pub fn boot_image(&self) -> Result<(), Error> {
         let mut buffer = [MaybeUninit::uninit(); 256];
 
-        // TODO: we are building an incomplete device path, we also need have the ESP device path
-        let path = DevicePathBuilder::with_buf(&mut buffer)
-            .push(&FilePath {
-                path_name: &self.kernel,
-            })
-            .expect("unreachable")
+        let mut builder = DevicePathBuilder::with_buf(&mut buffer);
+
+        for node in self.device_path()?.node_iter() {
+            builder = builder.push(&node).map_err(|_| Error::DevicePathFailed)?;
+        }
+
+        let path = builder.push(&FilePath { path_name: &self.kernel })
+            .map_err(|_| Error::DevicePathFailed)?
             .finalize()
             .map_err(|_| Error::DevicePathFailed)?;
+
+        if let Ok(path_str) = path.to_string(DisplayOnly(true), AllowShortcuts(true)) {
+            println!("info: device path: {}", path_str);
+        }
 
         let handle = boot::load_image(boot::image_handle(), LoadImageSource::FromDevicePath { device_path: path, boot_policy: BootPolicy::BootSelection })
             .map_err(|_| Error::LoadImageFailed(self.kernel.clone()))?;
