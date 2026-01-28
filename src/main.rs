@@ -8,6 +8,7 @@ mod options;
 mod error;
 mod menu;
 
+use profile::Profile;
 use options::Options;
 use error::Error;
 use menu::Menu;
@@ -33,13 +34,17 @@ fn main() -> Result<(), Error> {
 
     let profiles = profile::load_profiles(path)?;
 
-    let mut menu = Menu::new(profiles)?;
+    let profile = system::with_stdout(|output| -> Result<usize, Error> {
+        system::with_stdin(|input| -> Result<usize, Error> {
+            let mut menu = Menu::new(output, input, &profiles)?;
 
-    let profile = menu.select()?;
+            menu.select()
+        })
+    })?;
 
-    println!("info: booting: {}", profile.name);
+    println!("info: booting: {}", profiles[profile].name);
 
-    profile.boot_image()
+    profiles[profile].boot_image()
 }
 
 #[entry]
