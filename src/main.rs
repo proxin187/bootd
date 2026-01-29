@@ -8,7 +8,6 @@ mod options;
 mod error;
 mod menu;
 
-use profile::Profile;
 use options::Options;
 use error::Error;
 use menu::Menu;
