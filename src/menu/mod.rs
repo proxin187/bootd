@@ -3,6 +3,8 @@ use crate::error::Error;
 
 use core::fmt::Write;
 
+use alloc::format;
+
 use uefi::proto::console::text::{Key, ScanCode, Color, Input, Output, OutputMode};
 use uefi::boot;
 
@@ -32,15 +34,11 @@ impl<'a> Console<'a> {
         self.input.read_key().map_err(|err| Error::InputFailed(Some(err)))
     }
 
-    pub fn clear(&mut self, profiles: usize) -> Result<(), Error> {
+    pub fn clear(&mut self) -> Result<(), Error> {
         // TODO: this errors in qemu with edk 2 ovmf, it should work on real hardware though
         // self.output.enable_cursor(false).map_err(|err| Error::OutputFailed(Some(err)))?;
-        self.output.clear().map_err(|err| Error::OutputFailed(Some(err)))?;
 
-        let columns = self.mode.columns();
-        let rows = self.mode.rows();
-
-        self.move_cursor(|_| columns / 2, |_| (rows / 2) - (profiles / 2))
+        self.output.clear().map_err(|err| Error::OutputFailed(Some(err)))
     }
 
     pub fn set_color(&mut self, foreground: Color, background: Color) -> Result<(), Error> {
@@ -53,12 +51,22 @@ impl<'a> Console<'a> {
         self.output.set_cursor_position(column(column_position), row(row_position)).map_err(|err| Error::OutputFailed(Some(err)))
     }
 
+    pub fn write_str(&mut self, string: impl AsRef<str>) -> Result<(), Error> {
+        self.output.write_str(string.as_ref()).map_err(|_| Error::OutputFailed(None))
+    }
+
+    pub fn write_at<C: Fn(usize) -> usize, R: Fn(usize) -> usize>(&mut self, string: impl AsRef<str>, column: C, row: R) -> Result<(), Error> {
+        self.move_cursor(column, row)?;
+
+        self.write_str(string)
+    }
+
     pub fn write_profile(&mut self, profile: &Profile) -> Result<(), Error> {
         let columns = self.mode.columns();
 
-        self.output.write_str(&profile.name).map_err(|_| Error::OutputFailed(None))?;
+        self.write_at(&profile.name, |_| (columns / 2) - (profile.name.len() / 2), |row| row)?;
 
-        self.move_cursor(|_| columns / 2, |row| row + 1)
+        self.move_cursor(|_| 0, |row| row + 1)
     }
 }
 
@@ -81,8 +89,26 @@ impl<'a> Menu<'a> {
         }
     }
 
+    fn initialize(&mut self) -> Result<(), Error> {
+        let columns = self.console.mode.columns();
+        let rows = self.console.mode.rows();
+
+        let header = format!("bootd v{}", env!("CARGO_PKG_VERSION"));
+        let footer = "[Up/Down: Select] [Enter: Boot]";
+
+        self.console.write_at(&header, |_| (columns / 2) - (header.len() / 2), |_| 0)?;
+
+        self.console.write_at(&footer, |_| (columns / 2) - (footer.len() / 2), |_| rows - 1)?;
+
+        let rows = self.console.mode.rows();
+
+        self.console.move_cursor(|_| 0, |_| (rows / 2) - (self.profiles.len() / 2))
+    }
+
     pub fn select(&mut self) -> Result<usize, Error> {
-        self.console.clear(self.profiles.len())?;
+        self.console.clear()?;
+
+        self.initialize()?;
 
         loop {
             for (index, profile) in self.profiles.iter().enumerate() {
@@ -101,6 +127,8 @@ impl<'a> Menu<'a> {
                 Some(Key::Printable(character)) if Into::<char>::into(character) == '\r' => {
                     self.console.set_color(Color::White, Color::Black)?;
 
+                    self.console.clear()?;
+
                     return Ok(self.current);
                 },
                 _ => {},
@@ -110,6 +138,5 @@ impl<'a> Menu<'a> {
         }
     }
 }
-
 
 
