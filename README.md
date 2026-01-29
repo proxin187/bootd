@@ -20,7 +20,7 @@ There is no official way to install bootd, however these are the bare minimum st
 
 1. Move the bootd binary into /EFI/BOOT/BOOTX64.EFI on the EFI system partition
 2. Move your kernel EFI boot stub into the EFI system partition (eg. /EFI/BOOTD/kernels/vmlinuz-linux)
-3. Create your [boot profiles](Profiles) (eg. /EFI/BOOTD/profiles/example_profile.bootd)
+3. Create your [boot profiles](#Profiles) (eg. /EFI/BOOTD/profiles/example_profile.bootd)
 4. Ensure that the bootd binary recieves the profiles path argument `-bootd.profiles=/your/profiles/path`, on a physical machine this can be done with [efibootmgr](https://github.com/rhboot/efibootmgr)
 
 ## Profiles
