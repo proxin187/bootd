@@ -4,17 +4,19 @@
 extern crate alloc;
 
 mod profile;
-mod options;
 mod error;
 mod menu;
 
-use options::Options;
 use error::Error;
 use menu::Menu;
 
+use bootd_common::options::Options;
 use uefi::prelude::*;
-use uefi::println;
+use uefi::fs::PathBuf;
+use uefi::CString16;
 
+#[cfg(not(test))]
+use uefi::println;
 
 #[cfg(not(test))]
 #[panic_handler]
@@ -25,11 +27,14 @@ fn panic(info: &core::panic::PanicInfo) -> ! {
 }
 
 fn main() -> Result<(), Error> {
-    let options = Options::new()?;
+    let options = Options::new()
+        .map_err(|err| Error::Uefi(err))
+        .and_then(|options| options.ok_or(Error::NoOptions))?;
 
-    let path = options.profiles()?;
-
-    println!("info: bootd.profiles={}", path);
+    let path = options.arg("--profiles ")
+        .ok_or(Error::NoProfilesPath)
+        .and_then(|path| CString16::try_from(path).map_err(|_| Error::NoProfilesPath))
+        .map(|path| PathBuf::from(path))?;
 
     let profiles = profile::load_profiles(path)?;
 
@@ -41,9 +46,7 @@ fn main() -> Result<(), Error> {
         })
     })?;
 
-    println!("info: booting: {}", profiles[profile].name);
-
-    profiles[profile].boot_image()
+    profiles[profile].launch_image()
 }
 
 #[entry]
