@@ -53,7 +53,7 @@ There is no official way to install bootd, however here are the bare minimum ste
 1. Move the bootd binary into /EFI/BOOT/BOOTX64.EFI on the EFI system partition
 2. Move your EFI binary to the EFI system partition (eg. /EFI/BOOTD/kernels/vmlinuz-linux)
 3. Create your profiles (eg. /EFI/BOOTD/profiles/arch-linux)
-4. Configure bootd to read the correct profiles path by passing the profiles directory as an argument `-profiles /your/profiles/path`, on a physical machine this can be done with efibootmgr
+4. Configure bootd to read the correct profiles path by passing the profiles directory as an argument `--profiles /your/profiles/path`, on a physical machine this can be done with efibootmgr
 
 ### Directory Structure
 
@@ -79,7 +79,7 @@ An installation can look like this:
 
 ## Addons
 
-The `addons/` directory contains optional EFI tools you can use in your profiles:
+The `packages/addons/` directory contains optional EFI tools you can use in your profiles:
 
 - system-reset - A tool that wraps around [ResetSystem](https://uefi.org/specs/UEFI/2.10/08_Services_Runtime_Services.html#resetsystem) (cold/warm reboot, shutdown, firmware setup)
 
